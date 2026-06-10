@@ -1,0 +1,36 @@
+{
+  "ticker": "WBSA",
+  "timestamp": "09:30",
+  "prev": 1180,
+  "open": 1175,
+  "high": 1200,
+  "low": 1150,
+  "ara": 1180,
+  "arb": 1175,
+  "iep": 1175,
+  "avg": 1177,
+  "val": 5678901,
+  "lot": 4567,
+  "confidence": 89.3,
+  "bid_total": 153117,
+  "ask_total": 297920,
+  "bids": [
+    {"price": 1175, "lot": 45678, "freq": 567},
+    {"price": 1170, "lot": 38901, "freq": 456},
+    {"price": 1165, "lot": 34567, "freq": 345},
+    {"price": 1160, "lot": 23456, "freq": 234},
+    {"price": 1155, "lot": 10515, "freq": 123}
+  ],
+  "asks": [
+    {"price": 1180, "lot": 89012, "freq": 789},
+    {"price": 1185, "lot": 76543, "freq": 678},
+    {"price": 1190, "lot": 65432, "freq": 567},
+    {"price": 1195, "lot": 45678, "freq": 456},
+    {"price": 1200, "lot": 21255, "freq": 234}
+  ],
+  "pemantauan_khusus": true,
+  "expected_bias": "BEARISH",
+  "expected_ratio": 1.95,
+  "expected_verdict": "SELL",
+  "expected_reason": "IEP_AT_ARB + PEMANTAUAN_KHUSUS"
+}

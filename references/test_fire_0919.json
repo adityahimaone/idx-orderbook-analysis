@@ -1,0 +1,34 @@
+{
+  "ticker": "FIRE",
+  "timestamp": "09:19",
+  "prev": 136,
+  "open": 174,
+  "high": 178,
+  "low": 162,
+  "ara": 183,
+  "arb": 116,
+  "avg": 168,
+  "val": 2345678,
+  "lot": 3456,
+  "confidence": 91.7,
+  "bid_total": 121957,
+  "ask_total": 127601,
+  "bids": [
+    {"price": 160, "lot": 28029, "freq": 206},
+    {"price": 158, "lot": 23576, "freq": 189},
+    {"price": 156, "lot": 19876, "freq": 156},
+    {"price": 154, "lot": 18234, "freq": 134},
+    {"price": 152, "lot": 16543, "freq": 112}
+  ],
+  "asks": [
+    {"price": 170, "lot": 23576, "freq": 234},
+    {"price": 172, "lot": 21345, "freq": 198},
+    {"price": 174, "lot": 19876, "freq": 176},
+    {"price": 176, "lot": 18234, "freq": 145},
+    {"price": 178, "lot": 16789, "freq": 123}
+  ],
+  "expected_bias": "NEUTRAL",
+  "expected_ratio": 1.05,
+  "expected_ask_wall": {"price": 170, "lot": 23576},
+  "expected_bid_support": {"price": 160, "lot": 28029}
+}

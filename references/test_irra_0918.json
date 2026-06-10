@@ -1,0 +1,34 @@
+{
+  "ticker": "IRRA",
+  "timestamp": "09:18",
+  "prev": 510,
+  "open": 525,
+  "high": 600,
+  "low": 470,
+  "ara": 635,
+  "arb": 434,
+  "avg": 547,
+  "val": 987654,
+  "lot": 1234,
+  "confidence": 88.2,
+  "bid_total": 17327,
+  "ask_total": 28252,
+  "bids": [
+    {"price": 570, "lot": 4990, "freq": 256},
+    {"price": 565, "lot": 4123, "freq": 198},
+    {"price": 560, "lot": 3789, "freq": 167},
+    {"price": 555, "lot": 2345, "freq": 123},
+    {"price": 550, "lot": 2080, "freq": 98}
+  ],
+  "asks": [
+    {"price": 600, "lot": 5243, "freq": 345},
+    {"price": 605, "lot": 7890, "freq": 456},
+    {"price": 610, "lot": 6543, "freq": 321},
+    {"price": 615, "lot": 4567, "freq": 234},
+    {"price": 620, "lot": 4009, "freq": 198}
+  ],
+  "expected_bias": "BEARISH",
+  "expected_ratio": 1.63,
+  "expected_ask_wall": {"price": 600, "lot": 5243},
+  "expected_bid_support": {"price": 570, "lot": 4990}
+}

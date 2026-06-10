@@ -1,0 +1,32 @@
+📊 **{{d.ticker}}** — {{d.timestamp}}
+
+⚡ {{d.processing_time}}s | 📈 {{d.confidence}}% | {{d.mode}}
+
+**Market**
+Bias: {{d.bias}} | Momentum: {{d.momentum}}/100 | Imbalance: {{d.imbalance_ratio}}x
+
+**Orderbook**
+| Side | Total | Freq | Ratio |
+|------|-------|------|-------|
+| BID  | {{d.bid_total}} | {{d.bid_freq}} | {{d.bid_pct}}% |
+| ASK  | {{d.ask_total}} | {{d.ask_freq}} | {{d.ask_pct}}% |
+
+{{- if d.walls }}
+**Walls**
+{{- for d.walls as wall }}
+{{wall.side}} {{wall.price}}: {{wall.lot}} lot ({{wall.strength}}/100){{- if wall.institutional }} [INST]{{- end }}
+{{- end }}
+{{- end }}
+
+{{- if d.recommendations }}
+**🎯 Entry**
+{{- for d.recommendations as rec }}
+{{rec.emoji}} **{{rec.tier}}** | Entry: {{rec.entry}} | TP: {{rec.tp}} | SL: {{rec.sl}} | R/R: {{rec.rr}}
+{{- end }}
+{{- end }}
+
+{{- if d.warnings }}
+⚠️ {{- for d.warnings as warning }} {{warning}}{{- if _i < _len - 1 }},{{- end }}{{- end }}
+{{- end }}
+
+*{{d.footer}}*
