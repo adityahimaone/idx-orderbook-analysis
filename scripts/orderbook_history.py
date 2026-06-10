@@ -197,21 +197,52 @@ def get_wall_history(ticker: str, hours_back: int = 6) -> Dict:
     return result
 
 
-def get_recent_snapshots(ticker: str, limit: int = 5) -> List[Dict]:
-    """Get recent snapshots for a ticker."""
+def get_all_tickers() -> List[str]:
+    """Return distinct tickers in DB."""
+    init_db()
+    conn = sqlite3.connect(str(DB_PATH))
+    c = conn.cursor()
+    rows = c.execute("SELECT DISTINCT ticker FROM snapshots ORDER BY ticker").fetchall()
+    conn.close()
+    return [r[0] for r in rows if r[0]]
+
+
+def get_snapshots_since(ticker: str, since: datetime = None) -> List[Dict]:
+    """Return all snapshots for a ticker since given time."""
     init_db()
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
-
-    rows = conn.execute("""
-        SELECT * FROM snapshots
-        WHERE ticker = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-    """, (ticker, limit)).fetchall()
-
+    c = conn.cursor()
+    if since:
+        rows = c.execute("""
+            SELECT * FROM snapshots WHERE ticker = ? AND created_at >= ?
+            ORDER BY created_at
+        """, (ticker, since.strftime("%Y-%m-%d %H:%M:%S"))).fetchall()
+    else:
+        rows = c.execute("""
+            SELECT * FROM snapshots WHERE ticker = ? ORDER BY created_at
+        """, (ticker,)).fetchall()
+    result = []
+    for r in rows:
+        snap = dict(r)
+        # Fetch walls
+        wall_rows = c.execute("""
+            SELECT side, price, lot, freq, tipe, is_mega FROM walls WHERE snapshot_id = ?
+        """, (r["id"],)).fetchall()
+        walls = {"bid_walls": [], "ask_walls": [], "mega_walls": []}
+        for w in wall_rows:
+            entry = {"price": w["price"], "lot": w["lot"], "freq": w["freq"],
+                     "tipe": w["tipe"], "is_mega": bool(w["is_mega"])}
+            if "Mega" in w["tipe"]:
+                walls["mega_walls"].append(entry)
+            elif w["side"] == "BID":
+                walls["bid_walls"].append(entry)
+            else:
+                walls["ask_walls"].append(entry)
+        snap["walls"] = walls
+        result.append(snap)
     conn.close()
-    return [dict(r) for r in rows]
+    return result
 
 
 def get_latest_snapshot(ticker: str) -> Optional[Dict]:

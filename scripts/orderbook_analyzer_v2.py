@@ -145,43 +145,75 @@ def classify_walls(bids: List[Dict], asks: List[Dict],
     bid_threshold = bid_mean * 2.5
     ask_threshold = ask_mean * 2.5
 
+    # Plan.md §11 wall tiers: >10K significant, >50K institutional, >100K mega
+    MEGA_THRESHOLD = 100_000
+
     result = {"bid_walls": [], "ask_walls": [], "mega_walls": []}
 
     for b in bids:
-        if b["lot"] > bid_threshold:
-            jarak_ticks = (last_price - b["price"]) // max(tick_size, 1)
-            is_mega = b["lot"] >= 50000  # institutional mega threshold
-            strength = min(100, (b["lot"] / bid_mean) * 25)
+        above_threshold = b["lot"] > bid_threshold
+        is_mega = b["lot"] >= MEGA_THRESHOLD
+        jarak_ticks = (last_price - b["price"]) // max(tick_size, 1)
+        strength = min(100, (b["lot"] / bid_mean) * 25)
+
+        if is_mega:
             cls = ClassifiedWall(
-                tipe="Mega Wall Bid" if is_mega else "Bid Wall",
-                price=b["price"],
-                lot=b["lot"],
-                freq=b["freq"],
-                jarak_dari_harga=jarak_ticks,
-                strength=strength,
-                is_mega=is_mega,
+                tipe="Mega Wall Bid",
+                price=b["price"], lot=b["lot"], freq=b["freq"],
+                jarak_dari_harga=jarak_ticks, strength=strength, is_mega=True,
             )
-            result["mega_walls"].append(asdict(cls)) if is_mega else result["bid_walls"].append(asdict(cls))
+            result["mega_walls"].append(asdict(cls))
+        elif above_threshold:
+            cls = ClassifiedWall(
+                tipe="Bid Wall",
+                price=b["price"], lot=b["lot"], freq=b["freq"],
+                jarak_dari_harga=jarak_ticks, strength=strength, is_mega=False,
+            )
+            result["bid_walls"].append(asdict(cls))
 
     for a in asks:
-        if a["lot"] > ask_threshold:
-            jarak_ticks = (a["price"] - last_price) // max(tick_size, 1)
-            is_mega = a["lot"] >= 50000
-            strength = min(100, (a["lot"] / ask_mean) * 25)
+        above_threshold = a["lot"] > ask_threshold
+        is_mega = a["lot"] >= MEGA_THRESHOLD
+        jarak_ticks = (a["price"] - last_price) // max(tick_size, 1)
+        strength = min(100, (a["lot"] / ask_mean) * 25)
+
+        if is_mega:
             cls = ClassifiedWall(
-                tipe="Mega Wall Ask" if is_mega else "Ask Wall",
-                price=a["price"],
-                lot=a["lot"],
-                freq=a["freq"],
-                jarak_dari_harga=jarak_ticks,
-                strength=strength,
-                is_mega=is_mega,
+                tipe="Mega Wall Ask",
+                price=a["price"], lot=a["lot"], freq=a["freq"],
+                jarak_dari_harga=jarak_ticks, strength=strength, is_mega=True,
             )
-            result["mega_walls"].append(asdict(cls)) if is_mega else result["ask_walls"].append(asdict(cls))
+            result["mega_walls"].append(asdict(cls))
+        elif above_threshold:
+            cls = ClassifiedWall(
+                tipe="Ask Wall",
+                price=a["price"], lot=a["lot"], freq=a["freq"],
+                jarak_dari_harga=jarak_ticks, strength=strength, is_mega=False,
+            )
+            result["ask_walls"].append(asdict(cls))
 
     # Sort by proximity
     for k in ("bid_walls", "ask_walls", "mega_walls"):
         result[k].sort(key=lambda w: w["jarak_dari_harga"])
+
+    # If no bid/ask walls detected after strict threshold, show top-3 largest lots as "Level"
+    # This ensures display always has data — plan.md says show S/R from lot concentration
+    if not result["bid_walls"] and not result["mega_walls"]:
+        top_bids = sorted(bids, key=lambda x: x["lot"], reverse=True)[:3]
+        for b in top_bids:
+            result["bid_walls"].append({
+                "tipe": "Level Bid", "price": b["price"], "lot": b["lot"],
+                "freq": b["freq"], "jarak_dari_harga": (last_price - b["price"]) // max(tick_size, 1),
+                "strength": 10, "is_mega": False,
+            })
+    if not result["ask_walls"] and not any(w["tipe"] == "Mega Wall Ask" for w in result["mega_walls"]):
+        top_asks = sorted(asks, key=lambda x: x["lot"], reverse=True)[:3]
+        for a in top_asks:
+            result["ask_walls"].append({
+                "tipe": "Level Ask", "price": a["price"], "lot": a["lot"],
+                "freq": a["freq"], "jarak_dari_harga": (a["price"] - last_price) // max(tick_size, 1),
+                "strength": 10, "is_mega": False,
+            })
 
     return result
 
@@ -928,6 +960,7 @@ class OrderbookPlanAnalyzer:
         result = {
             "ticker": data.get("ticker"),
             "timestamp": data.get("timestamp"),
+            "prev_timestamp": prev.get("timestamp", "") if prev else "",
             # Market fields needed by formatter / rec engine
             "price": price,
             "high": high,
@@ -954,6 +987,9 @@ class OrderbookPlanAnalyzer:
 
             # Section 4
             "walls": classified_walls,
+
+            # Floor delta metadata
+            "prev_floor_lot": _get_prev_floor_lot(prev, classified_walls),
 
             # Section 5
             "delta_signals": delta_signals,
@@ -1026,6 +1062,22 @@ class OrderbookPlanAnalyzer:
                 print(f"  [{rf['severitas']}] {rf['id']}: {rf['nama']}")
 
         print(f"\nSummary: {result['summary']}")
+
+
+def _get_prev_floor_lot(prev: Optional[Dict], curr_walls: Dict) -> Optional[int]:
+    """Get floor lot from prev snapshot for delta arrow comparison."""
+    if not prev:
+        return None
+    prev_walls = prev.get("walls", {})
+    prev_megas = prev_walls.get("mega_walls", [])
+    prev_bid_megas = [w for w in prev_megas if "Bid" in w.get("tipe", "")]
+    if prev_bid_megas:
+        return prev_bid_megas[0].get("lot", 0)
+    # Fallback: check bid_walls top
+    prev_bid_walls = prev_walls.get("bid_walls", [])
+    if prev_bid_walls:
+        return sorted(prev_bid_walls, key=lambda w: w.get("lot", 0), reverse=True)[0].get("lot", 0)
+    return None
 
 
 def _calc_pct_delta(prev: Optional[Dict], key: str, curr_val: int) -> float:

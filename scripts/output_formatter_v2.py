@@ -245,8 +245,16 @@ def format_caveman_summary(analysis: Dict, recommendations: Dict) -> str:
         if n >= 1_000_000: return f"{n/1_000_000:.1f}M"
         return str(n)
 
-    ts = analysis.get("timestamp", datetime.now().strftime("%H:%M"))
+    def get_cond_icon(key):
+        for m in entry_cond.get("met", []):
+            if key in m: return "✅"
+        for n in entry_cond.get("not_met", []):
+            if key in n:
+                if "❌" in n or "jelas" in n.lower(): return "❌"
+                return "⏳"
+        return "⏳"
 
+    ts = analysis.get("timestamp", datetime.now().strftime("%H:%M"))
     lines = []
 
     # ━━━ Header ━━━
@@ -269,53 +277,43 @@ def format_caveman_summary(analysis: Dict, recommendations: Dict) -> str:
         ask_part = ""
         if i < len(all_bid_walls):
             bw = all_bid_walls[i]
-            bid_part = f"{bw['price']:,} │{bw['lot']:,}│f{bw['freq']}"
+            bid_part = f"{bw['price']:,} │ {fmt_lot(bw['lot'])} │ f{bw['freq']}"
         if i < len(all_ask_walls):
             aw = all_ask_walls[i]
-            tag = " CEIL" if i == 0 else ""
-            ask_part = f"{aw['price']:,} │{aw['lot']:,}│f{aw['freq']}{tag}"
-        # Pad bid side
-        bid_part = bid_part.ljust(24)
-        lines.append(f"{bid_part}  {ask_part}")
+            tag = " ⚡CEIL" if i == 0 else ""
+            ask_part = f"{aw['price']:,} │ {fmt_lot(aw['lot'])} │ f{aw['freq']}{tag}"
+        lines.append(f"{bid_part.ljust(22)}  {ask_part}")
 
-    # Floor line
+    # Floor line with actual delta arrow
     if mega_bid:
         mb = mega_bid[0]
-        fl_dir = ""  # No delta yet for single snapshot
-        lines.append(f"FLOOR→{mb['price']:,}│{mb['lot']:,}{fl_dir}│f{mb['freq']}")
+        # Check if prev data exists for floor delta
+        fl_dir = "→"
+        prev_floor = analysis.get("prev_floor_lot")
+        if prev_floor is not None:
+            if mb["lot"] > prev_floor:
+                fl_dir = "↑"
+            elif mb["lot"] < prev_floor:
+                fl_dir = "↓"
+        lines.append(f"FLOOR→{mb['price']:,}│{fmt_lot(mb['lot'])}{fl_dir}│f{mb['freq']}")
     lines.append("")
 
     # ━━━ Conditions ━━━
-    met_list = entry_cond.get("met", [])
-    not_met_list = entry_cond.get("not_met", [])
-
     cond_labels = [
+        ("harga_dekat_mega_wall_bid", "Dekat mega wall bid"),
         ("wall_tidak_berkurang", "Wall bid hold/tebal"),
-        ("harga_flat_2_snapshot", "Harga flat di low"),
-        ("candle_reversal_volume_spike", "Candle reversal"),
-        ("bid_total_naik_lintas_snapshot", "Vol spike naik"),
-        ("harga_dekat_mega_wall_bid", "Bid naik 2+ snap"),
+        ("harga_flat_2_snapshot", "Harga flat 2+ snap"),
+        ("bid_total_naik_lintas_snapshot", "Bid total naik"),
+        ("candle_reversal_volume_spike", "Candle reversal + vol"),
     ]
 
-    def get_cond_icon(key):
-        for m in met_list:
-            if key in m: return "✅"
-        for n in not_met_list:
-            if key in n:
-                if "❌" in n or "jelas" in n.lower(): return "❌"
-                return "⏳"
-        return "⏳"
-
     lines.append("CONDITIONS [LR]")
-    # Row 1: first 2
     c1 = f"{get_cond_icon(cond_labels[0][0])} {cond_labels[0][1]}"
     c2 = f"{get_cond_icon(cond_labels[1][0])} {cond_labels[1][1]}"
     lines.append(f"{c1.ljust(26)}{c2}")
-    # Row 2: next 2
     c3 = f"{get_cond_icon(cond_labels[2][0])} {cond_labels[2][1]}"
     c4 = f"{get_cond_icon(cond_labels[3][0])} {cond_labels[3][1]}"
     lines.append(f"{c3.ljust(26)}{c4}")
-    # Row 3: last 1
     c5 = f"{get_cond_icon(cond_labels[4][0])} {cond_labels[4][1]}"
     lines.append(c5)
     lines.append("")
@@ -340,8 +338,6 @@ def format_caveman_summary(analysis: Dict, recommendations: Dict) -> str:
         lines.append(f"       E:{agg.get('entry', '-')} SL:{agg.get('sl', '-')} TP1:{agg.get('tp', '-')} TP2:{agg.get('tp2', '-')} RR:{agg.get('rr', 0):.1f}x")
     else:
         lines.append(f"       E:- SL:- TP1:- TP2:- RR:-")
-
-    # MOD
     lines.append(f"▸ MOD  E:{mod.get('entry', '-')} SL:{mod.get('sl', '-')} TP1:{mod.get('tp', '-')} TP2:{mod.get('tp2', '-')} RR:{mod.get('rr', 0):.1f}x")
 
     # LR
@@ -353,6 +349,7 @@ def format_caveman_summary(analysis: Dict, recommendations: Dict) -> str:
     lines.append(f"▸ LR   E:{lr_entry} SL:{lr_sl} TP1:{lr_tp1} TP2:{lr_tp2} RR:{lr_rr:.1f}x")
 
     # SL/TP distance for LR
+    sl_dist_low, sl_dist_high, tp1_dist_low, tp1_dist_high = 0, 0, 0, 0
     if lr_entry != "-" and lr_sl != "-":
         try:
             entry_low = int(str(lr_entry).split("–")[0].replace(",", ""))
@@ -368,12 +365,11 @@ def format_caveman_summary(analysis: Dict, recommendations: Dict) -> str:
             pass
     lines.append("")
 
-    # ━━━ Delta (if available) ━━━
+    # ━━━ Delta ━━━
     if signals:
-        lines.append(f"⚡ DELTA")
+        lines.append(f"⚡ DELTA (vs {analysis.get('prev_timestamp', '-')})")
         for s in signals[:3]:
-            emoji = "↑" if s["tipe"] == "bullish" else ("↓" if s["tipe"] == "bearish" else "→")
-            lines.append(f"   {emoji} {s['nama']}: {s['detail']}")
+            lines.append(f"   {s.get('detail', '')}")
         lines.append("")
 
     # ━━━ Alert ━━━
@@ -381,13 +377,9 @@ def format_caveman_summary(analysis: Dict, recommendations: Dict) -> str:
         rf = red_flags[0]
         lines.append(f"⚠️ {rf.get('nama', rf.get('id', 'Red flag aktif'))}")
     elif cond < 3 and fase == "UNDETERMINED":
-        if mega_bid:
-            lines.append(f"⚠️ Tunggu harga dekat floor {mega_bid[0]['price']:,} + wall hold 2+ menit")
-        else:
-            lines.append(f"⚠️ Fase belum jelas — observe dulu, collect 2+ snapshot")
+        lines.append(f"⚠️ Fase belum jelas — observe dulu")
     elif cond >= 3:
         lines.append(f"✅ Setup valid — entry sesuai tier & size rule")
-
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
     return "\n".join(lines)

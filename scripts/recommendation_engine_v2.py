@@ -119,11 +119,12 @@ def generate_tiers_planmd(analysis: Dict) -> Dict:
     #  SL: below strongest support
     #  TP: mid range
     #  RR min: 1:1.8
-    # ──────────────────────────────────────
-    mod_entry_min = tier2_support
-    mod_entry_max = tier2_support + tick if tier2_support else price
-    mod_sl = (strongest_support - tick * 3) if strongest_support else mod_entry_min - tick * 5
-    mod_tp = (strongest_resistance - tick) if strongest_resistance else price + 5 * tick
+    # MOD
+    mod_entry_min = tier2_support if tier2_support else price
+    mod_entry_max = mod_entry_min + tick
+    # SL must be < entry
+    mod_sl = (strongest_support - tick * 2) if strongest_support and strongest_support < mod_entry_min else mod_entry_min - tick * 3
+    mod_tp = (strongest_resistance - tick) if strongest_resistance and strongest_resistance > mod_entry_min else price + 5 * tick
     mod_rr = _calc_rr(mod_entry_min, mod_tp, mod_sl)
 
     mod_valid = mod_rr >= 1.8 and conditions_met >= 3
@@ -144,21 +145,15 @@ def generate_tiers_planmd(analysis: Dict) -> Dict:
     if not mod_valid:
         result["tiers"]["moderat"]["alasan"] = f"RR {mod_rr:.2f}:1 < 1.8 or conditions {conditions_met}/5 < 3"
 
-    # ──────────────────────────────────────
-    #  TIER 3 — LOW RISK (DEFAULT)
-    #  Entry: near mega wall bid / strongest support
-    #  SL: below mega wall
-    #  TP1: back to support
-    #  TP2: resistance
-    #  RR min: 1:2.0
-    #  Sizing: based on conditions met
-    # ──────────────────────────────────────
-    lr_floor = mega_bid[0]["price"] if mega_bid else (strongest_support if strongest_support else low_hari)
+    # LR
+    # LR: use LOWEST support as floor (deepest accumulation zone per plan.md §8)
+    lr_floor = min(support_lvls) if support_lvls else (low_hari or price)
     lr_entry_min = lr_floor
     lr_entry_max = lr_floor + tick * 2
     lr_sl = lr_floor - tick * 3
-    lr_tp1 = (strongest_support - tick) if strongest_support and strongest_support > lr_floor else price
-    lr_tp2 = (strongest_resistance - tick) if strongest_resistance else price + 5 * tick
+    # TP1: nearest support above entry
+    lr_tp1 = next((s for s in support_lvls if s > lr_entry_max), price + tick * 2)
+    lr_tp2 = (strongest_resistance - tick) if strongest_resistance and strongest_resistance > lr_entry_min else price + 5 * tick
 
     lr_rr = _calc_rr(lr_entry_min, lr_tp2, lr_sl)
     lr_valid = lr_rr >= 2.0 and conditions_met >= 3
